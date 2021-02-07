@@ -1,7 +1,7 @@
 # DrainingTheSwamp
 A tool for pipelining memory intensive builds in Gentoo.
 
-When parallel (-j4) compiling QtWebEngine, Chromium, or other memory hungry applications, my Raspberry Pi 4/4GB often runs out of memory and the build fails because the Linux OOM killer take out one of the compilation processes. Even if I add copious swap space, that doesn't really help when 4 cores are standing in each other's way, fighting against each other to swap their process into RAM all at the same time.
+When parallel (-j4) compiling QtWebEngine, Chromium, or other memory hungry applications, my Raspberry Pi 4/4GB often runs out of memory and the build fails because the Linux OOM killer takes out one of the compilation processes. Even if I add copious swap space, that doesn't really help when 4 cores are standing in each other's way, fighting against each other to swap their process into RAM all at the same time.
 
 This program attempts to "pipeline" builds by temporarily suspending processes until the largest memory consuming process is able to finish. It automatically resumes suspended processes once memory pressure has been relieved. 
 
