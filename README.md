@@ -23,4 +23,23 @@ How to Use
 ==========
 Run this program as root, or at least as the "portage" user, so that it will have permission to send stop and continue "kill" signals to the cc1plus processes spawned by your emerge build. You can freely start up, terminate, or re-start this program at any time and it will pick right up suspending and resuming the on-going portage build processes for you. 
 
+If your builds aren't running as the "portage" user, you may need to use
+the "-u" command line option to specify which processes to watch/manage.
+
+Sometimes it can be handy to forcibly limit the number of concurrent processes,
+or to even suspend the build entirely if you're trying to use your computer
+for a bit and the builds are just taking up too much RAM. 
+
+"-1" will limit running builds to one process at a time.
+"-2" will limit builds to two or three processes at a time.
+"-s" will limit existing builds to one process at a time, until they've all
+finished, then DrainingTheSwamp will exit, with the build suspended. Probably 
+only works on ninja builds right now.
+
+Limitations
+===========
 Unfortunately, this program does not work against "rustc" builds, as rust seems to do some funny business with CPU usage reporting and the way it manages to carry out builds. But it should work great for programs compiled with gcc or clang.
+
+Sometimes the build may still get stuffed up with processes lodged in swap 
+after a long run, after some truly huge build processes, etc. Still
+tweaking the algorithms and trying to come up with ways to solve this.

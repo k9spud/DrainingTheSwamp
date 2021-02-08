@@ -20,11 +20,11 @@
 #include <QProcess>
 #include <QString>
 
-Womper::Womper()
+Womper::Womper(QString watchUser)
 {
     process = new QProcess();
     ninja = -1;
-    args << "-u" << "portage" << "-o" << "pid,state,rss,%cpu,comm" << "--sort" << "-rss" << "--no-headers" << "-w" << "-w";
+    args << "-u" << watchUser << "-o" << "pid,state,rss,%cpu,comm" << "--sort" << "-rss" << "--no-headers" << "-w" << "-w";
     printf("ps");
     foreach(QString s, args)
     {
@@ -65,15 +65,15 @@ void Womper::scan()
             continue;
         }
 
+        pid = columns.at(0).toInt();
+        status = columns.at(1);
+        rss = columns.at(2);
+        memory[pid] = rss.toLong();
         if(cmd == "ninja")
         {
             ninja = pid;
         }
 
-        pid = columns.at(0).toInt();
-        status = columns.at(1);
-        rss = columns.at(2);
-        memory[pid] = rss.toLong();
         if(status.startsWith("R") || status.startsWith("S"))
         {
             running.append(pid);
@@ -93,11 +93,23 @@ void Womper::allowOne()
 {
     bool foundFirst = false;
     pid_t pid;
-
+/*
     if(swamped.count() + running.count() == 1)
     {
         // already allowing only one process to run
         return;
+    }
+*/
+    foreach(pid_t pid, running)
+    {
+        if(foundFirst || pid == ninja)
+        {
+            kill(pid, SIGSTOP);
+        }
+        else
+        {
+            foundFirst = true;
+        }
     }
 
     foreach(pid, swamped)
@@ -112,15 +124,18 @@ void Womper::allowOne()
         }
     }
 
-    foreach(pid_t pid, running)
+    if(foundFirst == false)
     {
-        if(foundFirst || pid == ninja)
+        if(stopped.contains(ninja))
         {
-            kill(pid, SIGSTOP);
+            kill(ninja, SIGCONT);
         }
         else
         {
-            foundFirst = true;
+            if(stopped.count())
+            {
+                kill(stopped.first(), SIGCONT);
+            }
         }
     }
 }
@@ -292,4 +307,50 @@ void Womper::allowAll()
         pid = stopped.at(i);
         kill(pid, SIGCONT);
     }
+}
+
+
+bool Womper::suspendToOne()
+{
+    bool foundFirst = false;
+    pid_t pid;
+
+    foreach(pid_t pid, running)
+    {
+        if(foundFirst || pid == ninja)
+        {
+            kill(pid, SIGSTOP);
+        }
+        else
+        {
+            foundFirst = true;
+        }
+    }
+
+    foreach(pid, swamped)
+    {
+        if(foundFirst || pid == ninja)
+        {
+            kill(pid, SIGSTOP);
+        }
+        else
+        {
+            foundFirst = true;
+        }
+    }
+
+    if(foundFirst == false)
+    {
+        foreach(pid_t pid, stopped)
+        {
+            if(pid != ninja)
+            {
+                kill(pid, SIGCONT);
+                foundFirst = true;
+                break;
+            }
+        }
+    }
+
+    return !foundFirst;
 }
