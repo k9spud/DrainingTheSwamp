@@ -19,18 +19,31 @@ public:
     void allowAll();
     bool suspendToOne();
 
-    QVector<pid_t> running;
-    QVector<pid_t> swamped;
-    QVector<pid_t> stopped;
-    QHash<pid_t, long> memory;
+    struct ProcessInfo
+    {
+        pid_t pid;
+        char status;
+        QString cmd;
+        long rss;
+//        QString cwd;
+    };
 
-    pid_t ninja;
+    int running;
+    int swamped;
+    int stopped;
+    QVector<ProcessInfo> processes;
+    QVector<ProcessInfo> oldProcesses;
+    QVector<pid_t> pids;
+
+    QHash<pid_t, long> highWaterMark; // largest size (in KB) of memory usage we've seen for each process
+    long lastBigSize; // size in KB of the last exited biggest running process
+    long biggestRunning; // size in KB of the currently biggest running process
 
 private:
     QProcess* process;
     QStringList args;
     QStringList watches;
-
+    QStringList compilers;
 };
 
 #endif // WOMPER_H

@@ -31,12 +31,14 @@ QStringList args;
 int main(int argc, char* argv[])
 {
     double totalRam, availableRam, percentFree;
+    long estimatedSum;
     useconds_t sleepTime;
     char bounce[] = ".oO0Oo. ";
+    char allowWhich;
     QString watchUser = "portage";
     int i = 0;
 
-    printf("Draining the Swamp v1.0.1\n");
+    printf("Draining The Swamp v1.0.5\n");
 
     bool stayAtOne = false;
     bool stayAtTwo = false;
@@ -96,6 +98,7 @@ Command line options:
             meminfo();
             totalRam = kb_main_total;
             availableRam = kb_main_available;
+            estimatedSum = (totalRam - availableRam) - (womper.biggestRunning) + (womper.lastBigSize);
             percentFree = (availableRam / totalRam) * 100.0f;
             if(womper.suspendToOne())
             {
@@ -103,7 +106,9 @@ Command line options:
                 return 0;
             }
             sleepTime = 500000;
-            printf("%c Free memory: %.1f%% (%d stopped, %d running, %d swamped)      \r", bounce[i], percentFree, womper.stopped.count(), womper.running.count(), womper.swamped.count());
+            printf("%c est:%ldMB sum:%ldMB %.1f%% Free A1(%d stopped, %d running, %d swamped)   \r",
+                   bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree,
+                   womper.stopped, womper.running, womper.swamped);
             i++;
             if(i > 7)
             {
@@ -124,24 +129,30 @@ Command line options:
         meminfo();
         totalRam = kb_main_total;
         availableRam = kb_main_available;
+        estimatedSum = (totalRam - availableRam) - (womper.biggestRunning) + (womper.lastBigSize);
         percentFree = (availableRam / totalRam) * 100.0f;
-        if(percentFree < 13.0f || stayAtOne)
+        if(percentFree < 13.0f || stayAtOne || estimatedSum > (totalRam - 500000))
         {
             womper.allowOne();
+            allowWhich = '1';
             sleepTime = 400000;
         }
-        else if(percentFree < 25.0f || stayAtTwo)
+        else if(percentFree < 22.0f || stayAtTwo || estimatedSum > (totalRam - 750000) || womper.swamped > 1)
         {
             womper.allowTwo();
+            allowWhich = '2';
             sleepTime = 500000;
         }
         else
         {
             womper.allowAll();
+            allowWhich = 'A';
             sleepTime = 1000000;
         }
 
-        printf("%c Free memory: %.1f%% (%d stopped, %d running, %d swamped)      \r", bounce[i], percentFree, womper.stopped.count(), womper.running.count(), womper.swamped.count());
+        printf("%c est:%ldMB sum:%ldMB %.1f%% Free A%c(%d stopped, %d running, %d swamped)   \r",
+               bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree,
+               allowWhich, womper.stopped, womper.running, womper.swamped);
         i++;
         if(i > 7)
         {

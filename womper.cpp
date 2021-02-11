@@ -23,7 +23,7 @@
 Womper::Womper(QString watchUser)
 {
     process = new QProcess();
-    ninja = -1;
+    lastBigSize = 0;
     args << "-u" << watchUser << "-o" << "pid,state,rss,%cpu,comm" << "--sort" << "-rss" << "--no-headers" << "-w" << "-w";
     printf("ps");
     foreach(QString s, args)
@@ -31,25 +31,34 @@ Womper::Womper(QString watchUser)
         printf(" %s", s.toStdString().c_str());
     }
     printf("\n");
-    watches << "ninja" << "make" << "cc1" << "cc1plus" << "ld" << "aarch64-unknown";
+    compilers << "cc1" << "cc1plus" << "ld" << "aarch64-unknown" << "node" << "as";
+    watches << "ninja" << "make" << compilers;
 }
 
 void Womper::scan()
 {
     process->start("/bin/ps", args);
     QStringList columns;
-    QString cmd;
-    QString status;
-    QString rss;
-    pid_t pid;
+    ProcessInfo pi;
 
-    running.clear();
-    swamped.clear();
-    stopped.clear();
-    memory.clear();
-    ninja = -1;
+    running = 0;
+    swamped = 0;
+    stopped = 0;
+    oldProcesses.clear();
+    foreach(pi, processes)
+    {
+        if(compilers.contains(pi.cmd))
+        {
+            oldProcesses.append(pi);
+        }
+    }
+    processes.clear();
+    pids.clear();
+    biggestRunning = 0;
+
     process->waitForFinished();
-    QString data = process->readAllStandardOutput();
+    QString stat;
+    QString data = process->readAllStandardOutput();    
     QStringList lines = data.split('\n');
     foreach(QString line, lines)
     {
@@ -59,82 +68,130 @@ void Womper::scan()
             break;
         }
 
-        cmd = columns.at(4);
-        if(watches.contains(cmd) == false)
+        pi.cmd = columns.at(4);
+        if(watches.contains(pi.cmd) == false)
         {
             continue;
         }
 
-        pid = columns.at(0).toInt();
-        status = columns.at(1);
-        rss = columns.at(2);
-        memory[pid] = rss.toLong();
-        if(cmd == "ninja")
+        pi.pid = columns.at(0).toInt();
+        stat = columns.at(1);
+        if(stat.count())
         {
-            ninja = pid;
+            pi.status = stat.front().toLatin1();
+        }
+        else
+        {
+            pi.status = ' ';
+        }
+        pi.rss = columns.at(2).toLong();
+
+        if(pi.status != 'Z')
+        {
+            pids.append(pi.pid);
+            processes.append(pi);
         }
 
-        if(status.startsWith("R") || status.startsWith("S"))
+        if(pi.rss > highWaterMark[pi.pid])
         {
-            running.append(pid);
+            highWaterMark[pi.pid] = pi.rss;
         }
-        else if(status.startsWith("T"))
+
+        if(pi.status == 'R')
         {
-            stopped.append(pid);
+            running++;
+            if(biggestRunning == 0)
+            {
+                biggestRunning = pi.rss;
+            }
         }
-        else if(status.startsWith("D"))
+        else if(pi.status == 'D')
         {
-            swamped.append(pid);
+            swamped++;
+            if(biggestRunning == 0)
+            {
+                biggestRunning = pi.rss;
+            }
         }
+        else if(pi.status == 'T')
+        {
+            stopped++;
+        }
+    }
+
+//    bool foundFirst = false;
+    foreach(pi, oldProcesses)
+    {
+        if(pids.contains(pi.pid))
+        {
+            if(lastBigSize < pi.rss)
+            {
+                lastBigSize = pi.rss;
+            }
+            continue;
+        }
+/*
+        if(foundFirst == false)
+        {
+            foundFirst = true;
+            printf("\npid[%d] %ldMB %s\n", pi.pid, highWaterMark[pi.pid] / 1024, pi.cmd.toStdString().c_str());
+        }
+        else
+        {
+            printf("pid[%d] %ldMB %s\n", pi.pid, highWaterMark[pi.pid] / 1024, pi.cmd.toStdString().c_str());
+        }
+*/
+        if(highWaterMark[pi.pid] < 1024 * 750)
+        {
+            lastBigSize = (static_cast<float>(lastBigSize) * 0.90f + static_cast<float>(highWaterMark[pi.pid]) * 0.10f);
+        }
+        else
+        {
+            lastBigSize = highWaterMark[pi.pid];
+        }
+        highWaterMark.remove(pi.pid);
     }
 }
 
 void Womper::allowOne()
 {
     bool foundFirst = false;
-    pid_t pid;
-/*
-    if(swamped.count() + running.count() == 1)
-    {
-        // already allowing only one process to run
-        return;
-    }
-*/
-    foreach(pid_t pid, running)
-    {
-        if(foundFirst || pid == ninja)
-        {
-            kill(pid, SIGSTOP);
-        }
-        else
-        {
-            foundFirst = true;
-        }
-    }
+    ProcessInfo pi;
 
-    foreach(pid, swamped)
+    foreach(pi, processes)
     {
-        if(foundFirst || pid == ninja)
+        if(foundFirst)
         {
-            kill(pid, SIGSTOP);
+            if(pi.status != 'T' && pi.cmd != "as")
+            {
+                kill(pi.pid, SIGSTOP);
+            }
         }
         else
         {
-            foundFirst = true;
+            if(compilers.contains(pi.cmd))
+            {
+                if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                {
+                    foundFirst = true;
+                }
+
+                if(pi.status == 'T')
+                {
+                    kill(pi.pid, SIGCONT);
+                }
+            }
         }
     }
 
     if(foundFirst == false)
     {
-        if(stopped.contains(ninja))
+        // couldn't find any compilers to start running, better start ninja/make
+        foreach(pi, processes)
         {
-            kill(ninja, SIGCONT);
-        }
-        else
-        {
-            if(stopped.count())
+            if(compilers.contains(pi.cmd) == false && pi.status == 'T')
             {
-                kill(stopped.first(), SIGCONT);
+                kill(pi.pid, SIGCONT);
             }
         }
     }
@@ -142,158 +199,85 @@ void Womper::allowOne()
 
 void Womper::allowTwo()
 {
-    pid_t pid;
-
-    if(running.count() > 2)
+    ProcessInfo pi;
+    int compilersRunning = 0;
+    int sizeOfFirst = 0;
+    foreach(pi, processes)
     {
-        pid = running.first();
-        if(memory[pid] < 1000000)
+        if(compilersRunning >= 2)
         {
-            // running process is not very big, allow the next biggest to run
-            for(int i = 2; i < running.count(); i++)
+            if(pi.status != 'T' && pi.cmd != "as")
             {
-                pid = running.at(i);
-                kill(pid, SIGSTOP);
+                kill(pi.pid, SIGSTOP);
             }
         }
         else
         {
-            bool found = false;
-            // running process is big, allow the next to only be medium sized
-            for(int i = 1; i < running.count(); i++)
+            if(compilers.contains(pi.cmd))
             {
-                pid = running.at(i);
-                if(memory[pid] < 500000 && found == false)
+                if(compilersRunning == 0)
                 {
-                    found = true;
-                    continue;
-                }
-
-                kill(pid, SIGSTOP);
-            }
-        }
-
-        return;
-    }
-
-    if(stopped.count() == 0)
-    {
-        // no processes available to start
-        return;
-    }
-
-    int run = running.count();
-    bool ninjaRunning = running.contains(ninja);
-    if(ninjaRunning && run == 3)
-    {
-        // already allowing only two processes to run (plus ninja)
-        return;
-    }
-
-    if(!ninjaRunning && run == 2)
-    {
-        // already allowing only two processes to run (but no ninja)
-        if(ninja > 0)
-        {
-            kill(ninja, SIGCONT);
-        }
-        return;
-    }
-
-    if((ninjaRunning && run == 2) || (!ninjaRunning && run == 1))
-    {
-        // not running enough processes, find a stopped one to allow
-
-        // first, who is already running and how big is it?
-        pid = running.first();
-        if(pid == ninja)
-        {
-            pid = running.at(1);
-        }
-        if(memory[pid] < 1000000)
-        {
-            // running process is not very big, allow the next biggest to run
-            for(int i = 0; i < stopped.count(); i++)
-            {
-                pid = stopped.at(i);
-                if(pid != ninja)
-                {
-                    kill(pid, SIGCONT);
-                    break;
-                }
-            }
-        }
-        else
-        {
-            // allow one big (already running) and one medium process to run
-            for(int i = 0; i < stopped.count(); i++)
-            {
-                pid = stopped.at(i);
-                if(pid == ninja)
-                {
-                    continue;
-                }
-
-                if(memory[pid] < 500000)
-                {
-                    kill(pid, SIGCONT);
-                    break;
-                }
-            }
-        }
-        return;
-    }
-
-    if((ninjaRunning && run == 1) || (!ninjaRunning && run == 0))
-    {
-        // nothing running right now
-        if(stopped.count() == 1)
-        {
-            // only one process available to start
-            kill(stopped.first(), SIGCONT);
-            return;
-        }
-
-        // find two processes to allow
-        for(int i = 0; i < stopped.count(); i++)
-        {
-            pid = stopped.at(i);
-            if(pid == ninja)
-            {
-                continue;
-            }
-
-            kill(pid, SIGCONT);
-            if(memory[pid] < 1000000)
-            {
-                // running process is not very big, allow the next biggest to run
-                for(; i < stopped.count(); i++)
-                {
-                    pid = stopped.at(i);
-                    if(pid != ninja)
+                    if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
                     {
-                        kill(pid, SIGCONT);
-                        return;
+                        sizeOfFirst = pi.rss;
+                        compilersRunning++;
+                    }
+
+                    if(pi.status == 'T')
+                    {
+                        kill(pi.pid, SIGCONT);
+                    }
+                }
+                else if(compilersRunning == 1)
+                {
+                    if(sizeOfFirst < 1000000 && lastBigSize < 1500000)
+                    {
+                        // running process is not very big and not estimated to be big,
+                        // allow the next biggest to run
+                        if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                        {
+                            compilersRunning++;
+                        }
+
+                        if(pi.status == 'T')
+                        {
+                            kill(pi.pid, SIGCONT);
+                        }
+                    }
+                    else
+                    {
+                        // running process is big, allow the next to only be medium sized
+                        if(pi.rss < 500000)
+                        {
+                            if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                            {
+                                compilersRunning++;
+                            }
+
+                            if(pi.status == 'T')
+                            {
+                                kill(pi.pid, SIGCONT);
+                            }
+                        }
+                        else if(pi.status != 'T' && pi.cmd != "as")
+                        {
+                            // this one is too big, stop it
+                            kill(pi.pid, SIGSTOP);
+                        }
                     }
                 }
             }
-            else
-            {
-                // allow one big (already running) and one medium process to run
-                for(; i < stopped.count(); i++)
-                {
-                    pid = stopped.at(i);
-                    if(pid == ninja)
-                    {
-                        continue;
-                    }
+        }
+    }
 
-                    if(memory[pid] < 500000)
-                    {
-                        kill(pid, SIGCONT);
-                        return;
-                    }
-                }
+    if(compilersRunning < 2)
+    {
+        // couldn't find enough compilers to start running, better start ninja/make
+        foreach(pi, processes)
+        {
+            if(compilers.contains(pi.cmd) == false && pi.status == 'T')
+            {
+                kill(pi.pid, SIGCONT);
             }
         }
     }
@@ -301,51 +285,61 @@ void Womper::allowTwo()
 
 void Womper::allowAll()
 {
-    pid_t pid;
-    for(int i = 0; i < stopped.count(); i++)
+    ProcessInfo pi;
+    foreach(pi, processes)
     {
-        pid = stopped.at(i);
-        kill(pid, SIGCONT);
+        if(pi.status == 'T')
+        {
+            kill(pi.pid, SIGCONT);
+        }
     }
 }
-
 
 bool Womper::suspendToOne()
 {
     bool foundFirst = false;
-    pid_t pid;
-
-    foreach(pid_t pid, running)
+    ProcessInfo pi;
+    foreach(pi, processes)
     {
-        if(foundFirst || pid == ninja)
+        if(compilers.contains(pi.cmd) == false)
         {
-            kill(pid, SIGSTOP);
+            if(pi.status == 'R' || pi.status == 'D' || pi.status == 'S')
+            {
+                if(pi.cmd != "as")
+                {
+                    kill(pi.pid, SIGSTOP); // make sure all ninja/make processes are stopped.
+                }
+            }
         }
         else
         {
-            foundFirst = true;
-        }
-    }
-
-    foreach(pid, swamped)
-    {
-        if(foundFirst || pid == ninja)
-        {
-            kill(pid, SIGSTOP);
-        }
-        else
-        {
-            foundFirst = true;
+            if(pi.status == 'R' || pi.status == 'D' || pi.status == 'S')
+            {
+                if(foundFirst)
+                {
+                    if(pi.cmd != "as")
+                    {
+                        kill(pi.pid, SIGSTOP);
+                    }
+                }
+                else
+                {
+                    if(pi.status == 'R' || pi.status == 'D')
+                    {
+                        foundFirst = true;
+                    }
+                }
+            }
         }
     }
 
     if(foundFirst == false)
     {
-        foreach(pid_t pid, stopped)
+        foreach(pi, processes)
         {
-            if(pid != ninja)
+            if(compilers.contains(pi.cmd) && pi.status == 'T')
             {
-                kill(pid, SIGCONT);
+                kill(pi.pid, SIGCONT);
                 foundFirst = true;
                 break;
             }

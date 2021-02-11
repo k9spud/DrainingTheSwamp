@@ -15,6 +15,15 @@ By keeping the processes pipelined in this fashion, we can keep all 4 cores of t
 
 As a side benefit, this tool also ends up automatically throttling back emerge builds whenever you're busy using your computer for other tasks. Sure, your builds will take longer to complete, but at least they won't completely fail or prevent you from being able to use your computer at all, like they would otherwise.
 
+What's New in v1.0.5
+====================
+
+This version tries to maintain an estimate of how big the next "big one" may balloon up to, based on how big the last big processes got to by the end of their compilation. Using this, we can estimate how much memory may end up being needed, so we can decide whether to start limiting processes more early.
+
+It also fixes some bugs. One time, I saw an "as" process stopped for no good reason, and it blocked my Chromium build until I manually issued a "kill -CONT pid". Now the program will actively avoid stopping "as" processes and send them a continue signal if it finds any stopped. In my testing, "as" processes rarely take much memory (~13MB), so there doesn't seem to be any good reason to limit them.
+
+Removed "sleeping" processes from the "running" tally. That was an effort to try to get rustc to work, but it caused other problems (and rustc still didn't work).
+
 Requirements
 ============
 This program is written in Qt, uses the procps library, and executes the "ps" command internally to watch the portage user's processes. 
@@ -40,6 +49,6 @@ Limitations
 ===========
 Unfortunately, this program does not work against "rustc" builds, as rust seems to do some funny business with CPU usage reporting and the way it manages to carry out builds. But it should work great for programs compiled with gcc or clang.
 
-Sometimes the build may still get stuffed up with processes lodged in swap 
-after a long run, after some truly huge build processes, etc. Still
-tweaking the algorithms and trying to come up with ways to solve this.
+When a large compilation process begins, there may be a window of time where we could theoretically run some small compilation processes that would complete before the "big one" gets far enough along to cause swapping. Unfortunately, there is no good way to predict which processes are going to be small vs big, so the program currently does not utilize as much CPU as it theoretically could. 
+
+What is really needed, is smarter build tools (make/ninja), or a more memory efficient gcc. A database of how big each source file becomes during compilation might be useful, so that ninja/make could schedule one "big one" in parallel with known "small ones." As an external process, Draining The Swamp can only do so much.
