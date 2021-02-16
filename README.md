@@ -15,14 +15,13 @@ By keeping the processes pipelined in this fashion, we can keep all 4 cores of t
 
 As a side benefit, this tool also ends up automatically throttling back emerge builds whenever you're busy using your computer for other tasks. Sure, your builds will take longer to complete, but at least they won't completely fail or prevent you from being able to use your computer at all, like they would otherwise.
 
-What's New in v1.0.5
+What's New in v1.0.6
 ====================
 
-This version tries to maintain an estimate of how big the next "big one" may balloon up to, based on how big the last big processes got to by the end of their compilation. Using this, we can estimate how much memory may end up being needed, so we can decide whether to start limiting processes more early.
-
-It also fixes some bugs. One time, I saw an "as" process stopped for no good reason, and it blocked my Chromium build until I manually issued a "kill -CONT pid". Now the program will actively avoid stopping "as" processes and send them a continue signal if it finds any stopped. In my testing, "as" processes rarely take much memory (~13MB), so there doesn't seem to be any good reason to limit them.
-
-Removed "sleeping" processes from the "running" tally. That was an effort to try to get rustc to work, but it caused other problems (and rustc still didn't work).
+Still found trouble with an unwatched process getting stuck in the stopped
+state. Now instead of trying to maintain a list of "never stop" processes
+like "as," I've re-written the code to just always continue any proccesses
+found in the STOP state that aren't known compilation processes.
 
 Requirements
 ============
