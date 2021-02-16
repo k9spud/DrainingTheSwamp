@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
     QString watchUser = "portage";
     int i = 0;
 
-    printf("Draining The Swamp v1.0.6\n");
+    printf("Draining The Swamp v1.0.6b\n");
 
     bool stayAtOne = false;
     bool stayAtTwo = false;

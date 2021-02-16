@@ -69,11 +69,6 @@ void Womper::scan()
         }
 
         pi.cmd = columns.at(4);
-        if(watches.contains(pi.cmd) == false && pi.status != 'T')
-        {
-            continue;
-        }
-
         pi.pid = columns.at(0).toInt();
         stat = columns.at(1);
         if(stat.count())
@@ -85,6 +80,11 @@ void Womper::scan()
             pi.status = ' ';
         }
         pi.rss = columns.at(2).toLong();
+
+        if(watches.contains(pi.cmd) == false && pi.status != 'T')
+        {
+            continue;
+        }
 
         if(pi.status != 'Z')
         {
