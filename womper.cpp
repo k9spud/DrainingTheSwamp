@@ -31,7 +31,7 @@ Womper::Womper(QString watchUser)
         printf(" %s", s.toStdString().c_str());
     }
     printf("\n");
-    compilers << "cc1" << "cc1plus" << "ld" << "aarch64-unknown" << "node" << "as";
+    compilers << "cc1" << "cc1plus" << "ld" << "aarch64-unknown" << "node";
     watches << "ninja" << "make" << compilers;
 }
 
@@ -69,7 +69,7 @@ void Womper::scan()
         }
 
         pi.cmd = columns.at(4);
-        if(watches.contains(pi.cmd) == false)
+        if(watches.contains(pi.cmd) == false && pi.status != 'T')
         {
             continue;
         }
@@ -160,9 +160,15 @@ void Womper::allowOne()
 
     foreach(pi, processes)
     {
+        if(pi.status == 'T' && watches.contains(pi.cmd) == false)
+        {
+            kill(pi.pid, SIGCONT);
+            continue;
+        }
+
         if(foundFirst)
         {
-            if(pi.status != 'T' && pi.cmd != "as")
+            if(pi.status != 'T')
             {
                 kill(pi.pid, SIGSTOP);
             }
@@ -204,9 +210,15 @@ void Womper::allowTwo()
     int sizeOfFirst = 0;
     foreach(pi, processes)
     {
+        if(pi.status == 'T' && watches.contains(pi.cmd) == false)
+        {
+            kill(pi.pid, SIGCONT);
+            continue;
+        }
+
         if(compilersRunning >= 2)
         {
-            if(pi.status != 'T' && pi.cmd != "as")
+            if(pi.status != 'T')
             {
                 kill(pi.pid, SIGSTOP);
             }
@@ -259,7 +271,7 @@ void Womper::allowTwo()
                                 kill(pi.pid, SIGCONT);
                             }
                         }
-                        else if(pi.status != 'T' && pi.cmd != "as")
+                        else if(pi.status != 'T')
                         {
                             // this one is too big, stop it
                             kill(pi.pid, SIGSTOP);
@@ -301,14 +313,17 @@ bool Womper::suspendToOne()
     ProcessInfo pi;
     foreach(pi, processes)
     {
+        if(pi.status == 'T' && watches.contains(pi.cmd) == false)
+        {
+            kill(pi.pid, SIGCONT);
+            continue;
+        }
+
         if(compilers.contains(pi.cmd) == false)
         {
             if(pi.status == 'R' || pi.status == 'D' || pi.status == 'S')
             {
-                if(pi.cmd != "as")
-                {
-                    kill(pi.pid, SIGSTOP); // make sure all ninja/make processes are stopped.
-                }
+                kill(pi.pid, SIGSTOP); // make sure all ninja/make processes are stopped.
             }
         }
         else
@@ -317,10 +332,7 @@ bool Womper::suspendToOne()
             {
                 if(foundFirst)
                 {
-                    if(pi.cmd != "as")
-                    {
-                        kill(pi.pid, SIGSTOP);
-                    }
+                    kill(pi.pid, SIGSTOP);
                 }
                 else
                 {
