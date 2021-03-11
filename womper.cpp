@@ -56,7 +56,7 @@ void Womper::scan()
     pids.clear();
     biggestRunning = 0;
 
-    process->waitForFinished();
+    process->waitForFinished(-1);
     QString stat;
     QString data = process->readAllStandardOutput();    
     QStringList lines = data.split('\n');
@@ -177,7 +177,7 @@ void Womper::allowOne()
         {
             if(compilers.contains(pi.cmd))
             {
-                if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                 {
                     foundFirst = true;
                 }
@@ -229,7 +229,7 @@ void Womper::allowTwo()
             {
                 if(compilersRunning == 0)
                 {
-                    if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                    if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                     {
                         sizeOfFirst = pi.rss;
                         compilersRunning++;
@@ -246,7 +246,7 @@ void Womper::allowTwo()
                     {
                         // running process is not very big and not estimated to be big,
                         // allow the next biggest to run
-                        if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                        if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                         {
                             compilersRunning++;
                         }
@@ -261,7 +261,7 @@ void Womper::allowTwo()
                         // running process is big, allow the next to only be medium sized
                         if(pi.rss < 500000)
                         {
-                            if(pi.status == 'R' || pi.status == 'T' || pi.status == 'D')
+                            if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                             {
                                 compilersRunning++;
                             }
@@ -336,7 +336,7 @@ bool Womper::suspendToOne()
                 }
                 else
                 {
-                    if(pi.status == 'R' || pi.status == 'D')
+                    if(pi.status == 'R' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                     {
                         foundFirst = true;
                     }

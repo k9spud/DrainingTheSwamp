@@ -21,11 +21,9 @@
 
 #include <unistd.h>
 #include <signal.h>
-#include <QProcess>
 #include <QStringList>
 #include <proc/sysinfo.h>
 
-QProcess exec;
 QStringList args;
 
 int main(int argc, char* argv[])
@@ -38,7 +36,7 @@ int main(int argc, char* argv[])
     QString watchUser = "portage";
     int i = 0;
 
-    printf("Draining The Swamp v1.0.6b\n");
+    printf("Draining The Swamp v1.0.7\n");
 
     bool stayAtOne = false;
     bool stayAtTwo = false;
@@ -106,7 +104,7 @@ Command line options:
                 return 0;
             }
             sleepTime = 500000;
-            printf("%c est:%ldMB sum:%ldMB %.1f%% Free A1(%d stopped, %d running, %d swamped)   \r",
+            printf("%c est[%ld/%ld MB] %.1f%% Free A1(%d stopped, %d running, %d swamped)   \r",
                    bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree,
                    womper.stopped, womper.running, womper.swamped);
             i++;
@@ -150,7 +148,7 @@ Command line options:
             sleepTime = 1000000;
         }
 
-        printf("%c est:%ldMB sum:%ldMB %.1f%% Free A%c(%d stopped, %d running, %d swamped)   \r",
+        printf("%c est[%ld/%ld MB] %.1f%% Free A%c(%d stopped, %d running, %d swamped)   \r",
                bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree,
                allowWhich, womper.stopped, womper.running, womper.swamped);
         i++;

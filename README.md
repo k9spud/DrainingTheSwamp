@@ -15,13 +15,31 @@ By keeping the processes pipelined in this fashion, we can keep all 4 cores of t
 
 As a side benefit, this tool also ends up automatically throttling back emerge builds whenever you're busy using your computer for other tasks. Sure, your builds will take longer to complete, but at least they won't completely fail or prevent you from being able to use your computer at all, like they would otherwise.
 
-What's New in v1.0.6
+What's New in v1.0.7
 ====================
 
-Still found trouble with an unwatched process getting stuck in the stopped
-state. Now instead of trying to maintain a list of "never stop" processes
-like "as," I've re-written the code to just always continue any proccesses
-found in the STOP state that aren't known compilation processes.
+Ran into a deadlocked build of Chromium where a couple "aarch64-unknown" 
+processes were in the "D" state (waiting on disk I/O), but were 
+actually apparently waiting on the other pair of stopped "aarch64-unknown" 
+processes to finish doing whatever.
+
+Added a workaround so that "Draining The Swamp" will not count 
+"aarch64-unknown" processes in the "D" state towards the "allowed to run" 
+process count. This is kind of a hack, but it's working for me so far. 
+
+Finished compiling Chromium 90.0.4427.5 after five days or so on my RPi4 
+with 4GB RAM, zswap enabled, and 4GB of swap space on an external USB HDD 
+partition. I did, however, spend a bit of time during those 5 days at "-1" 
+process limiting, so that I could safely browse the web or play MegaGlest 
+while the build continued cranking along in the background... Yay for 
+dynamic adjustment of build parallelism!
+
+Changed the "ps" external process starting code to wait indefinitely for "ps"
+to finish. Previously the QProcess class was defaulting to a 30 second 
+time-out, which ordinarily is plenty of time for "ps" to finish executing, 
+but I guess if your system is heavily swamped, it might actually take longer. 
+This might solve sibercat's report of getting "QProcess::start: Process is 
+already running" warning messages.
 
 Requirements
 ============
