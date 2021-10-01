@@ -14,7 +14,7 @@ public:
     Womper(QString watchUser);
 
     void scan();
-    void allowOne();
+    void allowOne(double availableRam);
     void allowTwo();
     void allowAll();
     bool suspendToOne();
@@ -44,6 +44,8 @@ private:
     QStringList args;
     QStringList watches;
     QStringList compilers;
+
+    bool allowTwoBigs;
 };
 
 #endif // WOMPER_H
