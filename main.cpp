@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
     QString watchUser = "portage";
     int i = 0;
 
-    printf("Draining The Swamp v1.0.10\n");
+    printf("Draining The Swamp v1.0.8\n");
 
     bool stayAtOne = false;
     bool stayAtTwo = false;
@@ -104,8 +104,8 @@ Command line options:
                 return 0;
             }
             sleepTime = 500000;
-            printf("%c est[%ld/%ld MB] %.1f%% Free A1(%d stopped, %d running, %d swamped)   \r",
-                   bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree,
+            printf("%c est[%ld/%ld MB] free[%.1f%%/%.0fMB] (%d stopped, %d running, %d swamped)   \r",
+                   bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree, availableRam / 1000.0d,
                    womper.stopped, womper.running, womper.swamped);
             i++;
             if(i > 7)
@@ -129,13 +129,13 @@ Command line options:
         availableRam = kb_main_available;
         estimatedSum = (totalRam - availableRam) - (womper.biggestRunning) + (womper.lastBigSize);
         percentFree = (availableRam / totalRam) * 100.0f;
-        if(percentFree < 13.0f || stayAtOne || estimatedSum > (totalRam - 250000))
+        if(percentFree < 13.0f || stayAtOne || estimatedSum > (totalRam - 500000))
         {
-            womper.allowOne(availableRam);
+            womper.allowOne();
             allowWhich = '1';
             sleepTime = 400000;
         }
-        else if(percentFree < 22.0f || stayAtTwo || estimatedSum > (totalRam - 500000) || womper.swamped > 1)
+        else if(percentFree < 22.0f || stayAtTwo || estimatedSum > (totalRam - 750000) || womper.swamped > 1)
         {
             womper.allowTwo();
             allowWhich = '2';
@@ -148,7 +148,7 @@ Command line options:
             sleepTime = 1000000;
         }
 
-        printf("%c est[%ld/%ld MB] %.1f%% (%.0fMB) Free A%c(%d stopped, %d running, %d swamped)   \r",
+        printf("%c est[%ld/%ld MB] free[%.1f%%/%.0fMB] A%c(%d stopped, %d running, %d swamped)   \r",
                bounce[i], womper.lastBigSize / 1024, estimatedSum / 1024, percentFree, availableRam / 1000.0d,
                allowWhich, womper.stopped, womper.running, womper.swamped);
         i++;

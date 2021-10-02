@@ -24,8 +24,6 @@ Womper::Womper(QString watchUser)
 {
     process = new QProcess();
     lastBigSize = 0;
-    allowTwoBigs = false;
-
     args << "H" << "-u" << watchUser << "-o" << "pid,state,rss,%cpu,comm" << "--sort" << "-rss" << "--no-headers" << "-w" << "-w";
     printf("ps");
     foreach(QString s, args)
@@ -42,7 +40,6 @@ void Womper::scan()
     process->start("/bin/ps", args);
     QStringList columns;
     ProcessInfo pi;
-    ProcessInfo pi2;
 
     running = 0;
     swamped = 0;
@@ -173,13 +170,10 @@ void Womper::scan()
     }
 }
 
-void Womper::allowOne(double availableRam)
+void Womper::allowOne()
 {
     bool foundFirst = false;
     ProcessInfo pi;
-    int tinyProcesses = 0;
-
-    allowTwoBigs = false;
 
     foreach(pi, processes)
     {
@@ -193,16 +187,7 @@ void Womper::allowOne(double availableRam)
         {
             if(pi.status != 'T')
             {
-                if(tinyProcesses < 3 && (availableRam > 512000) && (pi.rss < 256000))
-                {
-                    tinyProcesses++;
-                    kill(pi.pid, SIGCONT);
-                }
-                else
-                {
-                    kill(pi.pid, SIGSTOP);
-                }
-
+                kill(pi.pid, SIGSTOP);
             }
         }
         else
@@ -238,8 +223,7 @@ void Womper::allowOne(double availableRam)
 void Womper::allowTwo()
 {
     ProcessInfo pi;
-    int bigCompilersRunning = 0;
-    int tinyCompilersRunning = 0;
+    int compilersRunning = 0;
     int sizeOfFirst = 0;
     foreach(pi, processes)
     {
@@ -249,7 +233,7 @@ void Womper::allowTwo()
             continue;
         }
 
-        if(bigCompilersRunning >= 2)
+        if(compilersRunning >= 2)
         {
             if(pi.status != 'T')
             {
@@ -260,12 +244,12 @@ void Womper::allowTwo()
         {
             if(compilers.contains(pi.cmd))
             {
-                if(bigCompilersRunning == 0)
+                if(compilersRunning == 0)
                 {
                     if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                     {
                         sizeOfFirst = pi.rss;
-                        bigCompilersRunning++;
+                        compilersRunning++;
                     }
 
                     if(pi.status == 'T')
@@ -273,22 +257,15 @@ void Womper::allowTwo()
                         kill(pi.pid, SIGCONT);
                     }
                 }
-                else //if(bigCompilersRunning == 1)
+                else if(compilersRunning == 1)
                 {
-                    if(allowTwoBigs && (sizeOfFirst < 1000000 && lastBigSize < 1500000 && (bigCompilersRunning + tinyCompilersRunning) < 4))
+                    if(sizeOfFirst < 1000000 && lastBigSize < 1500000)
                     {
                         // running process is not very big and not estimated to be big,
                         // allow the next biggest to run
                         if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                         {
-                            if(pi.rss < 256000)
-                            {
-                                tinyCompilersRunning++;
-                            }
-                            else
-                            {
-                                bigCompilersRunning++;
-                            }
+                            compilersRunning++;
                         }
 
                         if(pi.status == 'T')
@@ -299,23 +276,11 @@ void Womper::allowTwo()
                     else
                     {
                         // running process is big, allow the next to only be medium sized
-                        if(pi.rss < 256000 && (bigCompilersRunning + tinyCompilersRunning) < 4)
+                        if(pi.rss < 500000)
                         {
                             if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
                             {
-                                tinyCompilersRunning++;
-                            }
-
-                            if(pi.status == 'T')
-                            {
-                                kill(pi.pid, SIGCONT);
-                            }
-                        }
-                        else if(pi.rss < 500000 && (bigCompilersRunning + tinyCompilersRunning) < 4)
-                        {
-                            if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
-                            {
-                                bigCompilersRunning++;
+                                compilersRunning++;
                             }
 
                             if(pi.status == 'T')
@@ -334,17 +299,7 @@ void Womper::allowTwo()
         }
     }
 
-    if(tinyCompilersRunning == 0)
-    {
-        // couldn't find any tiny compilers to start running, go ahead and run a big compiler
-	allowTwoBigs = true;
-    }
-    else
-    {
-        allowTwoBigs = false;
-    }
-
-    if((bigCompilersRunning + tinyCompilersRunning) < 2)
+    if(compilersRunning < 2)
     {
         // couldn't find enough compilers to start running, better start ninja/make
         foreach(pi, processes)
@@ -359,61 +314,12 @@ void Womper::allowTwo()
 
 void Womper::allowAll()
 {
-    int compilersRunning = 0;
     ProcessInfo pi;
-    allowTwoBigs = false;
     foreach(pi, processes)
     {
-        if(compilers.contains(pi.cmd))
+        if(pi.status == 'T')
         {
-            if(compilersRunning == 0)
-            {
-                if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
-                {
-                    compilersRunning++;
-                }
-
-                if(pi.status == 'T')
-                {
-                    kill(pi.pid, SIGCONT);
-                }
-            }
-            else if(compilersRunning < 4)
-            {
-                if(pi.rss < 256000)
-                {
-                    if(pi.status == 'R' || pi.status == 'T' || (pi.status == 'D' && pi.cmd != "aarch64-unknown"))
-                    {
-                        compilersRunning++;
-                    }
-
-                    if(pi.status == 'T')
-                    {
-                        kill(pi.pid, SIGCONT);
-                    }
-                }
-                else
-                {
-                    if(pi.status != 'T')
-                    {
-                        kill(pi.pid, SIGSTOP);
-                    }
-                }
-            }
-            else
-            {
-                if(pi.status != 'T')
-                {
-                    kill(pi.pid, SIGSTOP);
-                }
-            }
-        }
-        else
-        {
-            if(pi.status == 'T')
-            {
-                kill(pi.pid, SIGCONT);
-            }
+            kill(pi.pid, SIGCONT);
         }
     }
 }
