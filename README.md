@@ -48,8 +48,6 @@ only works on ninja builds right now.
 
 Limitations
 ===========
-Unfortunately, this program does not work against "rustc" builds, as rust seems to do some funny business with CPU usage reporting and the way it manages to carry out builds. But it should work great for programs compiled with gcc or clang.
-
 When a large compilation process begins, there may be a window of time where we could theoretically run some small compilation processes that would complete before the "big one" gets far enough along to cause swapping. Unfortunately, there is no good way to predict which processes are going to be small vs big, so the program currently does not utilize as much CPU as it theoretically could. 
 
 What is really needed, is smarter build tools (make/ninja), or a more memory efficient gcc. A database of how big each source file becomes during compilation might be useful, so that ninja/make could schedule one "big one" in parallel with known "small ones." As an external process, Draining The Swamp can only do so much.
